@@ -8,7 +8,11 @@
 int main() {
     std::string line;
 
-    printBoard();
+    // board of the game witch will be used to test the capabilites of the library with CuteChess
+    board_t board;
+    initBoardSTD(&board);
+    printBoard(&board);
+
     while (std::getline(std::cin, line)) {
         if (line == "uci") {
             std::cout << "id name Tiresia 1.0\n";
