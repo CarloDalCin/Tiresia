@@ -1,6 +1,6 @@
 # Compilatore
 CXX = g++
-CXXFLAGS = -Wall -Wextra -Iinclude -std=c++17
+CXXFLAGS = -Wall -Wextra -Iinclude -std=c++23
 
 # Cartelle
 SRC_DIR = src
