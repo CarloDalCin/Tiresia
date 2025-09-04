@@ -18,6 +18,7 @@ enum PieceType : uint8_t {
   ROOK = 0b00000100,
   QUEEN = 0b00000101,
   KING = 0b00000110,
+  PIECE_NB
 };
 
 static inline Color operator|(Color color, PieceType type) {

@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-enum Square { // clang-format off
+enum class Square : uint8_t { // clang-format off
 //0   1   2   3   4   5   6   7
   A1, B1, C1, D1, E1, F1, G1, H1,
 //8   9   10  11  12  13  14  15
@@ -22,31 +22,76 @@ enum Square { // clang-format off
   SQUARE_NONE
 }; // clang-format on
 
-// Move is only a wrapper for the information needed to move a piece it does not
-// actually move the piece!! It contains information about the source and
+template <typename... Squares>
+constexpr uint64_t squares_to_ULL(Squares... square) {
+  return (0ULL | ... | (1ULL << static_cast<int>(square)));
+}
+
+// Move is only a wrapper for the information needed to move a piece, it does
+// not actually move the piece!! It contains information about the source and
 // destination squares as well as flags
 class Move {
 private:
   // structure made of:
   // from (6 bits)
   // to (6 bits)
-  // promotion (1 bit)
-  // en passant (1 bit)
-  // castling (1 bit)
-  // ...
-  union {
-    uint16_t data; // packed data
-    struct {
-      uint8_t from : 6;       // from square (from 0 to 63)
-      uint8_t to : 6;         // to square (from 0 to 63)
-      uint8_t promotion : 1;  // promotion flag
-      uint8_t en_passant : 1; // en passant flag
-      uint8_t castling : 1;   // castling flag
-      uint8_t reserved : 1;   // reserved
-    };
-  };
+  // move type (4 bits)
+  uint16_t data; // packed data
+
+  static constexpr uint16_t FROM_MASK = 0x003F; // 6 bits (0000 0000 0011 1111)
+  static constexpr uint16_t TO_MASK = 0x0FC0;   // 6 bits (0000 1111 1100 0000)
+  static constexpr uint16_t TYPE_MASK = 0xF000; // 4 bits (1111 0000 0000 0000)
+
+  static constexpr uint16_t FROM_SHIFT = 0;
+  static constexpr uint16_t TO_SHIFT = 6;
+  static constexpr uint16_t TYPE_SHIFT = 12;
 
 public:
-  Move(uint8_t from, uint8_t to);
-  //....
+  enum class Type : uint8_t {
+    NORMAL = 0,           // just a normal move
+    PROMOTION_KNIGHT = 1, // promotion to knight
+    PROMOTION_BISHOP = 2, // promotion to bishop
+    PROMOTION_ROOK = 3,   // ...to rook
+    PROMOTION_QUEEN = 4,  // ...to queen
+    EN_PASSANT = 5,       // en passant capture
+    CASTLING = 6,         // castling (king side or quek side)
+
+    // double pawn move (only valid for the first move of the pawn)
+    DOUBLE_PAWN_PUSH = 7,
+    CAPTURE = 8,
+    CHECK = 9,
+    CHECKMATE = 10,
+    BULL_MOVE = 11, // for pruning
+
+    // reserved for future use
+    RESERVED_12 = 12,
+    RESERVED_13 = 13,
+    RESERVED_14 = 14,
+    RESERVED_15 = 15
+  };
+
+  Move() = delete;
+  constexpr explicit Move(Square from, Square to, Type type = Type::NORMAL)
+      : data(0) {
+    set_from(from);
+    set_to(to);
+    set_type(type);
+  }
+
+  constexpr bool operator==(const Type type) const {
+    return get_type() == type;
+  }
+
+  constexpr bool operator!=(const Type type) const {
+    return get_type() != type;
+  }
+
+  constexpr Square get_from() const;
+  constexpr Square get_to() const;
+  constexpr Type get_type() const;
+
+private:
+  constexpr void set_from(Square from);
+  constexpr void set_to(Square to);
+  constexpr void set_type(Type type);
 };
