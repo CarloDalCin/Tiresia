@@ -1,43 +1,62 @@
-# Compilatore
+# Compiler
 CXX = g++
 CXXFLAGS = -Wall -Wextra -Iinclude -std=c++23
 
-# Cartelle
+# Directory
 SRC_DIR = src
+TEST_DIR = tests
 OBJ_DIR = build
 BIN_DIR = build
 
-# Nome eseguibile
+# executable name
 TARGET = $(BIN_DIR)/tiresia
+TEST_TARGET = $(BIN_DIR)/tests
 
-# Trova tutti i file sorgente .cpp
+# Find all .cpp files in src/ and tests/
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
+TEST_SRCS = $(wildcard $(TEST_DIR)/*.cpp)
 
-# Converte in .o dentro build/
+# Convert to .o into build/
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
+TEST_OBJS = $(patsubst $(TEST_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(TEST_SRCS))
 
-# Regola principale
+# Default target
 all: $(TARGET)
 
-# Link finale
+# Final link
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-# Compilazione file .cpp -> .o
+# Compilating file .cpp -> .o
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Crea la cartella build se non esiste
+# Compilating tests -> .o
+$(OBJ_DIR)/%.o: $(TEST_DIR)/%.cpp | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Build tests
+tests: $(OBJS) $(TEST_OBJS)
+	$(CXX) $(CXXFLAGS) -o $(TEST_TARGET) $^
+
+# Debug mode
+debug: CXXFLAGS += -g -O0 -DDEBUG
+debug: clean all
+
+# Make build directory if it doesn't exist
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
 
-# Pulizia
+# Clean all
 clean:
-	rm -rf $(OBJ_DIR)/*.o $(TARGET)
+	rm -rf $(OBJ_DIR)/*.o $(TARGET) $(TEST_TARGET)
 
-# esegue il programma
+# Run the main program
 run: $(TARGET)
 	./$(TARGET)
 
-.PHONY: all clean
+# Run the tests program
+run-tests: tests
+	./$(TEST_TARGET)
 
+.PHONY: all clean run tests run-tests debug

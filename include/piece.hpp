@@ -1,94 +1,100 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 
 //
-//  Piece      = 0bCCTTTTTT
+//  ColorType  = 0bCCTTTTTT
 //  Color      = 0bCC
-//  PieceType  = 0bTT
+//  Type       = 0bTT
 //
-
-enum Color : uint8_t { NO_COLOR = 0, WHITE = 0b01000000, BLACK = 0b10000000 };
-
-enum PieceType : uint8_t {
-  NO_PIECE = 0,
-  PAWN = 0b00000001,
-  KNIGHT = 0b00000010,
-  BISHOP = 0b00000011,
-  ROOK = 0b00000100,
-  QUEEN = 0b00000101,
-  KING = 0b00000110,
-  PIECE_NB
-};
-
-static inline Color operator|(Color color, PieceType type) {
-  return static_cast<Color>(static_cast<uint8_t>(color) |
-                            static_cast<uint8_t>(type));
-}
 
 class Piece {
 public:
-  enum Value : uint8_t {
-    EMPTY = 0,
-    // white
-    W_PAWN = 0b01000001,
-    W_KNIGHT = 0b01000010,
-    W_BISHOP = 0b01000011,
-    W_ROOK = 0b01000100,
-    W_QUEEN = 0b01000101,
-    W_KING = 0b01000110,
-    // black
-    B_PAWN = 0b10000001,
-    B_KNIGHT = 0b10000010,
-    B_BISHOP = 0b10000011,
-    B_ROOK = 0b10000100,
-    B_QUEEN = 0b10000101,
-    B_KING = 0b10000110,
+  enum Color : uint8_t { WHITE = 0b00, BLACK = 0b01, NO_COLOR = 0b11 };
+
+  enum Type : uint8_t {
+    NO_PIECE = 0,
+    PAWN = 1,
+    KNIGHT = 2,
+    BISHOP = 3,
+    ROOK = 4,
+    QUEEN = 5,
+    KING = 6,
+    PIECE_NB
   };
 
-  Piece() = default;
-  constexpr Piece(Value piece) : piece(piece) {}
-  constexpr Piece(Color color, PieceType type)
-      : piece(static_cast<Value>(color | type)) {}
+  struct ColorType {
+    uint8_t data;
 
-  // implicit conversion ito Value for switch and comparison
-  constexpr operator Value() const { return piece; }
-  // the use of 'if(piece)' will be false for an empty piece
-  explicit constexpr operator bool() const { return piece != EMPTY; }
+    constexpr ColorType() : data(0) {}
+    constexpr explicit ColorType(uint8_t d) : data(d) {}
+    constexpr ColorType(Color c, Type t)
+        : data((static_cast<uint8_t>(c) << 6) | static_cast<uint8_t>(t)) {}
 
-  constexpr Color color() const;    // return the color of the piece
-  constexpr PieceType type() const; // return the type of the piece
+    constexpr operator uint8_t() const { return data; }
+    constexpr bool operator==(const ColorType &other) const {
+      return data == other.data;
+    }
+    constexpr bool operator!=(const ColorType &other) const {
+      return data != other.data;
+    }
+    constexpr Color color() const {
+      return static_cast<Color>((data >> 6) & 0b11);
+    }
+    constexpr Type type() const { return static_cast<Type>(data & 0b00111111); }
+  };
 
-  constexpr bool is_empty() const;
-  constexpr bool is_pawn() const;
-  constexpr bool is_knight() const;
-  constexpr bool is_bishop() const;
-  constexpr bool is_rook() const;
-  constexpr bool is_queen() const;
-  constexpr bool is_king() const;
-
-  constexpr bool is_white() const;
-  constexpr bool is_black() const;
-
-  constexpr bool operator==(const Value &other) const { return piece == other; }
-  constexpr bool operator!=(const Value &other) const { return piece != other; }
-  constexpr bool operator==(const PieceType &other) const {
-    return type() == other;
+  // operator| for combining color and type
+  friend constexpr ColorType operator|(Color c, Type t) {
+    return ColorType(c, t);
   }
-  constexpr bool operator!=(const PieceType &other) const {
-    return type() != other;
-  }
-  constexpr bool operator==(const Color &other) const {
-    return color() == other;
-  }
-  constexpr bool operator!=(const Color &other) const {
-    return color() != other;
+  friend constexpr ColorType operator|(Type t, Color c) {
+    return ColorType(c, t);
   }
 
-  // return the value of the piece
-  // if the piece is empty, return 0
-  constexpr uint8_t value() const;
+  // Factory functions
+  constexpr Piece() : piece(ColorType{}) {}
+  static constexpr Piece init(Color c, Type t) { return Piece(c | t); }
+  static constexpr Piece init(Type t, Color c) { return Piece(c | t); }
+  static constexpr Piece from(const ColorType &ct) { return Piece(ct); }
+  static constexpr Piece empty() { return Piece(ColorType()); }
+
+  // Conversion
+  constexpr operator ColorType() const { return piece; }
+  explicit constexpr operator bool() const { return type() != Type::NO_PIECE; }
+
+  // Accessories
+  constexpr Color color() const { return piece.color(); }
+  constexpr Type type() const { return piece.type(); }
+
+  constexpr bool is_empty() const { return type() == Type::NO_PIECE; }
+  constexpr bool is_pawn() const { return type() == Type::PAWN; }
+  constexpr bool is_knight() const { return type() == Type::KNIGHT; }
+  constexpr bool is_bishop() const { return type() == Type::BISHOP; }
+  constexpr bool is_rook() const { return type() == Type::ROOK; }
+  constexpr bool is_queen() const { return type() == Type::QUEEN; }
+  constexpr bool is_king() const { return type() == Type::KING; }
+
+  constexpr bool is_white() const { return color() == Color::WHITE; }
+  constexpr bool is_black() const { return color() == Color::BLACK; }
+
+  // Comparison
+  constexpr bool operator==(Type t) const { return type() == t; }
+  constexpr bool operator!=(Type t) const { return type() != t; }
+  constexpr bool operator==(Color c) const { return color() == c; }
+  constexpr bool operator!=(Color c) const { return color() != c; }
+
+  // Value of the piece
+  constexpr uint8_t value() const {
+    static constexpr std::array<uint8_t, Type::PIECE_NB> values{0, 1, 3, 3,
+                                                                5, 9, 0};
+    return values[static_cast<std::size_t>(type())];
+  }
 
 private:
-  Value piece;
+  ColorType piece;
+
+  // Costruttori privati
+  constexpr explicit Piece(ColorType ct) : piece(ct) {}
 };

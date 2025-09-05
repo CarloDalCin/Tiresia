@@ -79,19 +79,38 @@ public:
   }
 
   constexpr bool operator==(const Type type) const {
-    return get_type() == type;
+    return this->type() == type;
   }
 
   constexpr bool operator!=(const Type type) const {
-    return get_type() != type;
+    return this->type() != type;
   }
 
-  constexpr Square get_from() const;
-  constexpr Square get_to() const;
-  constexpr Type get_type() const;
+  constexpr Square from() const {
+    return static_cast<Square>((data & FROM_MASK) >> FROM_SHIFT);
+  }
+
+  constexpr Square to() const {
+    return static_cast<Square>((data & TO_MASK) >> TO_SHIFT);
+  }
+
+  constexpr Type type() const {
+    return static_cast<Move::Type>((data & TYPE_MASK) >> TYPE_SHIFT);
+  }
 
 private:
-  constexpr void set_from(Square from);
-  constexpr void set_to(Square to);
-  constexpr void set_type(Type type);
+  constexpr void set_from(Square from) {
+    data &= ~FROM_MASK;
+    data |= (static_cast<uint16_t>(from) << FROM_SHIFT) & FROM_MASK;
+  }
+
+  constexpr void set_to(Square to) {
+    data &= ~TO_MASK;
+    data |= (static_cast<uint16_t>(to) << TO_SHIFT) & TO_MASK;
+  }
+
+  constexpr void set_type(Move::Type type) {
+    data &= ~TYPE_MASK;
+    data |= (static_cast<uint16_t>(type) << TYPE_SHIFT) & TYPE_MASK;
+  }
 };

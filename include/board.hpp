@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include "castle.hpp"
 #include "move.hpp"
@@ -27,72 +28,101 @@ for a better understanding of how the board is represented see the move.hpp file
 class Board {
 private:
   // total size = 1472 bits = 184 bytes
-  Piece board[64];                // 64 * 8 bits = 512 bits
-  CastleRights castleRights;      // 8 bits + 56 bits(padding) = 64 bits
-  union {                         // 2 * 7 * 64 bits = 896 bits
-    uint64_t pieces[2][PIECE_NB]; // 0 = white, 1 = black
+  Piece board[64];           // 64 * 8 bits = 512 bits
+  CastleRights castleRights; // 8 bits + 56 bits(padding) = 64 bits
+  union {                    // 2 * 7 * 64 bits = 896 bits
+    uint64_t pieces[2][Piece::Type::PIECE_NB]; // 0 = white, 1 = black
     struct {
-      // index 0 = all pieces of the same color the union of all white or black
-      // pieces
-      uint64_t white[PIECE_NB];
-      uint64_t black[PIECE_NB];
+      // index 0 = all pieces of the same color the union of all white or
+      // black pieces
+      uint64_t white[Piece::Type::PIECE_NB];
+      uint64_t black[Piece::Type::PIECE_NB];
     };
   };
 
-private:
 public:
-  Board() = default;
+  explicit Board() = default;
   constexpr Board(const Board &b) = default;
   Board &operator=(const Board &b) = default;
 
-  constexpr void print() const;
+  constexpr void set_piece(Square sq, Piece p) {
+    const int idx = static_cast<int>(sq);
+    // Remove old piece from bitboard
+    const Piece old = board[idx];
+    if (old)
+      pieces[old.color()][static_cast<uint8_t>(old.type())] &= ~(1ULL << idx);
+
+    // Insert new piece into bitboard
+    if (p)
+      pieces[p.color()][static_cast<uint8_t>(p.type())] |= (1ULL << idx);
+
+    // Update Piece array
+    board[idx] = p;
+  }
+
+  constexpr Piece get_piece(Square sq) const {
+    return board[static_cast<int>(sq)];
+  }
+
+  // Aggiorna l’array board[64] a partire dalle bitboard
+  void update_board_from_bitboards() {
+    // Clear board
+    for (int i = 0; i < 64; ++i)
+      board[i] = Piece::empty();
+
+    // Update from bitboard white
+    for (uint8_t t = 1; t < Piece::Type::PIECE_NB; ++t) {
+      uint64_t bits = white[t];
+      for (int sq = 0; bits; ++sq) {
+        if (bits & 1ULL)
+          board[sq] =
+              Piece::init(Piece::Color::WHITE, static_cast<Piece::Type>(t));
+        bits >>= 1;
+      }
+    }
+
+    // update from bitboard black
+    for (uint8_t t = 1; t < Piece::Type::PIECE_NB; ++t) {
+      uint64_t bits = black[t];
+      for (int sq = 0; bits; ++sq) {
+        if (bits & 1ULL)
+          board[sq] =
+              Piece::init(Piece::Color::BLACK, static_cast<Piece::Type>(t));
+        bits >>= 1;
+      }
+    }
+  }
+
+  // Move piece 'from' to 'to' with Piece board
+  constexpr void move_piece(Square from, Square to) {
+    const Piece p = get_piece(from);
+    set_piece(from, Piece::empty());
+    set_piece(to, p);
+  }
+
+  // Move piece 'from' to 'to' with bitboards
+  void move_piece_bitboard(Square from, Square to, Piece::ColorType ct) {
+    const int from_idx = static_cast<int>(from);
+    const int to_idx = static_cast<int>(to);
+    Piece::Color color = ct.color();
+    Piece::Type type = ct.type();
+
+    // Remove piece from old position
+    pieces[color][type] &= ~(1ULL << from_idx);
+
+    // Add piece to new position
+    pieces[color][type] |= (1ULL << to_idx);
+
+    update_board_from_bitboards();
+  }
+
+  static std::string get_utf8_piece(const Piece &piece);
+  static std::string get_ascii_piece(const Piece &piece);
+
+  void print(std::string (*)(const Piece &)) const;
 
 public:
+  // Factory functions
   static Board init_std();
   static Board init_960();
 };
-
-// TODO
-// void initBoard960(board_t* b);
-
-// void printBoard(Board &b) {
-//   std::cout << "  a b c d e f g h\n";
-//   for (int rank = 8; rank >= 1; --rank) {
-//     std::cout << rank << " ";
-//     for (int file = 1; file <= 8; ++file) {
-//       uint64_t mask = squares_to_ULL(static_cast<Square>(file + rank * 8));
-//       std::string piece;
-//
-//       if (b.white[KING] & mask)
-//         piece = "♚";
-//       else if (b->white[QUEEN] & mask)
-//         piece = "♛";
-//       else if (b->white[ROOK] & mask)
-//         piece = "♜";
-//       else if (b->white[KNIGHT] & mask)
-//         piece = "♞";
-//       else if (b->white[BISHOP] & mask)
-//         piece = "♝";
-//       else if (b->white[PAWN] & mask)
-//         piece = "♟";
-//       else if (b->black[king] & mask)
-//         piece = "♔";
-//       else if (b->black[queen] & mask)
-//         piece = "♕";
-//       else if (b->black[rook] & mask)
-//         piece = "♖";
-//       else if (b->black[knight] & mask)
-//         piece = "♘";
-//       else if (b->black[bishop] & mask)
-//         piece = "♗";
-//       else if (b->black[pawn] & mask)
-//         piece = "♙";
-//       else
-//         piece = ".";
-//
-//       std::cout << piece << " ";
-//     }
-//     std::cout << rank << "\n";
-//   }
-//   std::cout << "  a b c d e f g h\n";
-// }

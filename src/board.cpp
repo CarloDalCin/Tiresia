@@ -1,10 +1,12 @@
 #include "board.hpp"
 
 #include <array>
+#include <iostream>
 
 Board Board::init_std() {
   Board b{};
 
+  using enum Piece::Type;
   using enum Square;
   b.white[PAWN] = 0xFFULL << 8;
   b.black[PAWN] = 0xFFULL << 48;
@@ -28,6 +30,8 @@ Board Board::init_std() {
                b.white[ROOK] | b.white[QUEEN] | b.white[KING];
   b.black[0] = b.black[PAWN] | b.black[KNIGHT] | b.black[BISHOP] |
                b.black[ROOK] | b.black[QUEEN] | b.black[KING];
+
+  b.update_board_from_bitboards();
   return b;
 }
 
@@ -42,5 +46,36 @@ Board Board::init_960() {
 
   // ... TODO
 
+  b.update_board_from_bitboards();
   return b;
+}
+
+std::string Board::get_ascii_piece(const Piece &piece) {
+  static const char pieceChars[2][Piece::Type::PIECE_NB] = {
+      {'.', 'P', 'N', 'B', 'R', 'Q', 'K'}, // White
+      {'.', 'p', 'n', 'b', 'r', 'q', 'k'}  // Black
+  };
+  return std::string{pieceChars[piece.color()][piece.type()]};
+}
+
+std::string Board::get_utf8_piece(const Piece &piece) {
+  static const std::string pieceUTF8[2][Piece::Type::PIECE_NB] = {
+      {".", "♟", "♞", "♝", "♜", "♛", "♚"}, // White
+      {".", "♙", "♘", "♗", "♖", "♕", "♔"}  // Black
+  };
+  return pieceUTF8[piece.color()][piece.type()];
+}
+
+void Board::print(std::string get_piece(const Piece &piece)) const {
+  for (int rank = 7; rank >= 0; --rank) {
+    std::cout << rank + 1 << " ";
+    for (int file = 0; file < 8; ++file) {
+      int index = rank * 8 + file;
+      const auto &piece = board[index];
+      std::string str = get_piece(piece);
+      std::cout << str << " ";
+    }
+    std::cout << "\n";
+  }
+  std::cout << "  a b c d e f g h\n";
 }
