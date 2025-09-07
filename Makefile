@@ -8,55 +8,64 @@ TEST_DIR = tests
 OBJ_DIR = build
 BIN_DIR = build
 
-# executable name
+# Executable name
 TARGET = $(BIN_DIR)/tiresia
 TEST_TARGET = $(BIN_DIR)/tests
 
-# Find all .cpp files in src/ and tests/
+# All source files in src/
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
+
+# Remove main.cpp from SRCS
+SRCS_NO_MAIN = $(filter-out $(SRC_DIR)/main.cpp,$(SRCS))
+
+# All test sources
 TEST_SRCS = $(wildcard $(TEST_DIR)/*.cpp)
 
-# Convert to .o into build/
+# Object files
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
+OBJS_NO_MAIN = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS_NO_MAIN))
 TEST_OBJS = $(patsubst $(TEST_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(TEST_SRCS))
 
 # Default target
 all: $(TARGET)
 
-# Final link
-$(TARGET): $(OBJS)
+# Main program
+$(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-# Compilating file .cpp -> .o
+# Test program
+$(TEST_TARGET): $(OBJS_NO_MAIN) $(TEST_OBJS) | $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+# Compile .cpp -> .o (src/)
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Compilating tests -> .o
+# Compile .cpp -> .o (tests/)
 $(OBJ_DIR)/%.o: $(TEST_DIR)/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Build tests
-tests: $(OBJS) $(TEST_OBJS)
-	$(CXX) $(CXXFLAGS) -o $(TEST_TARGET) $^
+# Create directories if not exist
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
+
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
 
 # Debug mode
 debug: CXXFLAGS += -g -O0 -DDEBUG
 debug: clean all
 
-# Make build directory if it doesn't exist
-$(OBJ_DIR):
-	mkdir -p $(OBJ_DIR)
-
 # Clean all
 clean:
-	rm -rf $(OBJ_DIR)/*.o $(TARGET) $(TEST_TARGET)
+	rm -rf $(OBJ_DIR) $(TARGET) $(TEST_TARGET)
 
 # Run the main program
 run: $(TARGET)
 	./$(TARGET)
 
 # Run the tests program
-run-tests: tests
+run-tests: $(TEST_TARGET)
 	./$(TEST_TARGET)
 
-.PHONY: all clean run tests run-tests debug
+.PHONY: all clean run run-tests debug

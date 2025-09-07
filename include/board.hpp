@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "castle.hpp"
 #include "move.hpp"
@@ -28,21 +29,32 @@ for a better understanding of how the board is represented see the move.hpp file
 class Board {
 private:
   // total size = 1472 bits = 184 bytes
-  Piece board[64];           // 64 * 8 bits = 512 bits
-  CastleRights castleRights; // 8 bits + 56 bits(padding) = 64 bits
-  union {                    // 2 * 7 * 64 bits = 896 bits
-    uint64_t pieces[2][Piece::Type::PIECE_NB]; // 0 = white, 1 = black
+  std::array<Piece, 64> board; // 64 * 8 bits = 512 bits
+  CastleRights castleRights;   // 8 bits + 56 bits(padding) = 64 bits
+  union {                      // 2 * 7 * 64 bits = 896 bits
+    std::array<std::array<uint64_t, Piece::Type::PIECE_NB>,
+               Piece::Color::COLOR_NB>
+        pieces; // 0 = white, 1 = black
     struct {
       // index 0 = all pieces of the same color the union of all white or
       // black pieces
-      uint64_t white[Piece::Type::PIECE_NB];
-      uint64_t black[Piece::Type::PIECE_NB];
+      std::array<uint64_t, Piece::Type::PIECE_NB> white;
+      std::array<uint64_t, Piece::Type::PIECE_NB> black;
     };
   };
 
 public:
-  explicit Board() = default;
+  // Constructors
+  constexpr explicit Board()
+      : board{}, castleRights(CastleRights::NO_CASTLE), pieces{{}} {}
   constexpr Board(const Board &b) = default;
+  constexpr Board(const std::string &fen);
+
+  // Factory functions
+  static constexpr Board empty() { return Board(); }
+  static constexpr Board from_fen(const std::string &fen) { return Board(fen); }
+
+  // Conversion
   Board &operator=(const Board &b) = default;
 
   constexpr void set_piece(Square sq, Piece p) {
@@ -65,7 +77,7 @@ public:
   }
 
   // Aggiorna l’array board[64] a partire dalle bitboard
-  void update_board_from_bitboards() {
+  constexpr void update_board_from_bitboards() {
     // Clear board
     for (int i = 0; i < 64; ++i)
       board[i] = Piece::empty();
@@ -76,7 +88,7 @@ public:
       for (int sq = 0; bits; ++sq) {
         if (bits & 1ULL)
           board[sq] =
-              Piece::init(Piece::Color::WHITE, static_cast<Piece::Type>(t));
+              Piece::make(Piece::Color::WHITE, static_cast<Piece::Type>(t));
         bits >>= 1;
       }
     }
@@ -87,7 +99,7 @@ public:
       for (int sq = 0; bits; ++sq) {
         if (bits & 1ULL)
           board[sq] =
-              Piece::init(Piece::Color::BLACK, static_cast<Piece::Type>(t));
+              Piece::make(Piece::Color::BLACK, static_cast<Piece::Type>(t));
         bits >>= 1;
       }
     }
@@ -101,7 +113,7 @@ public:
   }
 
   // Move piece 'from' to 'to' with bitboards
-  void move_piece_bitboard(Square from, Square to, Piece::ColorType ct) {
+  constexpr void move_piece_bitboard(Square from, Square to, Piece ct) {
     const int from_idx = static_cast<int>(from);
     const int to_idx = static_cast<int>(to);
     Piece::Color color = ct.color();
@@ -119,10 +131,10 @@ public:
   static std::string get_utf8_piece(const Piece &piece);
   static std::string get_ascii_piece(const Piece &piece);
 
-  void print(std::string (*)(const Piece &)) const;
+  void inline print(std::string (*)(const Piece &)) const;
 
 public:
   // Factory functions
-  static Board init_std();
-  static Board init_960();
+  static constexpr Board init_std();
+  static constexpr Board init_960();
 };

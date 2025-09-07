@@ -4,14 +4,19 @@
 #include <cstdint>
 
 //
-//  ColorType  = 0bCCTTTTTT
+//  Piece      = 0bCCTTTTTT
 //  Color      = 0bCC
 //  Type       = 0bTT
 //
 
 class Piece {
 public:
-  enum Color : uint8_t { WHITE = 0b00, BLACK = 0b01, NO_COLOR = 0b11 };
+  enum Color : uint8_t {
+    WHITE = 0b00,
+    BLACK = 0b01,
+    COLOR_NB = 0b10,
+    NO_COLOR = 0b11
+  };
 
   enum Type : uint8_t {
     NO_PIECE = 0,
@@ -24,49 +29,29 @@ public:
     PIECE_NB
   };
 
-  struct ColorType {
-    uint8_t data;
-
-    constexpr ColorType() : data(0) {}
-    constexpr explicit ColorType(uint8_t d) : data(d) {}
-    constexpr ColorType(Color c, Type t)
-        : data((static_cast<uint8_t>(c) << 6) | static_cast<uint8_t>(t)) {}
-
-    constexpr operator uint8_t() const { return data; }
-    constexpr bool operator==(const ColorType &other) const {
-      return data == other.data;
-    }
-    constexpr bool operator!=(const ColorType &other) const {
-      return data != other.data;
-    }
-    constexpr Color color() const {
-      return static_cast<Color>((data >> 6) & 0b11);
-    }
-    constexpr Type type() const { return static_cast<Type>(data & 0b00111111); }
-  };
-
   // operator| for combining color and type
-  friend constexpr ColorType operator|(Color c, Type t) {
-    return ColorType(c, t);
-  }
-  friend constexpr ColorType operator|(Type t, Color c) {
-    return ColorType(c, t);
-  }
+  friend constexpr Piece operator|(Color c, Type t) { return Piece(c, t); }
+  friend constexpr Piece operator|(Type t, Color c) { return Piece(c, t); }
 
   // Factory functions
-  constexpr Piece() : piece(ColorType{}) {}
-  static constexpr Piece init(Color c, Type t) { return Piece(c | t); }
-  static constexpr Piece init(Type t, Color c) { return Piece(c | t); }
-  static constexpr Piece from(const ColorType &ct) { return Piece(ct); }
-  static constexpr Piece empty() { return Piece(ColorType()); }
+  constexpr explicit Piece(Color c, Type t)
+      : data((static_cast<uint8_t>(c) << 6) | static_cast<uint8_t>(t)) {}
+  constexpr explicit Piece(Type t, Color c) : Piece(c, t) {}
+  constexpr Piece() : data(Color::NO_COLOR | Type::NO_PIECE) {}
+  static constexpr Piece empty() { return Piece(); }
+  static constexpr Piece make(Color c, Type t) { return Piece(c | t); }
+  static constexpr Piece make(Type t, Color c) { return Piece(c | t); }
+  static constexpr Piece from(const uint8_t &ct) { return Piece(ct); }
 
   // Conversion
-  constexpr operator ColorType() const { return piece; }
+  constexpr operator uint8_t() const { return data; }
   explicit constexpr operator bool() const { return type() != Type::NO_PIECE; }
 
   // Accessories
-  constexpr Color color() const { return piece.color(); }
-  constexpr Type type() const { return piece.type(); }
+  constexpr Color color() const {
+    return static_cast<Color>((data >> 6) & 0b11);
+  }
+  constexpr Type type() const { return static_cast<Type>(data & 0b00111111); }
 
   constexpr bool is_empty() const { return type() == Type::NO_PIECE; }
   constexpr bool is_pawn() const { return type() == Type::PAWN; }
@@ -93,8 +78,7 @@ public:
   }
 
 private:
-  ColorType piece;
+  uint8_t data;
 
-  // Costruttori privati
-  constexpr explicit Piece(ColorType ct) : piece(ct) {}
+  constexpr explicit Piece(uint8_t ct) : data(ct) {}
 };

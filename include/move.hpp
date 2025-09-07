@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 enum class Square : uint8_t { // clang-format off
 //0   1   2   3   4   5   6   7
@@ -25,6 +26,11 @@ enum class Square : uint8_t { // clang-format off
 template <typename... Squares>
 constexpr uint64_t squares_to_ULL(Squares... square) {
   return (0ULL | ... | (1ULL << static_cast<int>(square)));
+}
+
+constexpr Square square_from_string(const std::string &str) {
+  return static_cast<Square>((std::tolower(str[0]) & 0x7f) +
+                             (str[1] & 0x3F) * 8);
 }
 
 // Move is only a wrapper for the information needed to move a piece, it does
