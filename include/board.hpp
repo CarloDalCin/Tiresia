@@ -1,12 +1,19 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <optional>
+#include <regex>
 #include <string>
-#include <vector>
 
 #include "castle.hpp"
 #include "move.hpp"
 #include "piece.hpp"
+
+#ifdef DEBUG
+#define TODO                                                                   \
+  retrun {}
+#endif
 
 /*
 The board is represented as a 64 bit integer, with each bit representing a
@@ -48,14 +55,15 @@ public:
   constexpr explicit Board()
       : board{}, castleRights(CastleRights::NO_CASTLE), pieces{{}} {}
   constexpr Board(const Board &b) = default;
-  constexpr Board(const std::string &fen);
+  // FEN ref: https://it.wikipedia.org/wiki/Notazione_Forsyth-Edwards
+  inline Board(const std::string &fen) { set_from_fen(fen); }
 
   // Factory functions
   static constexpr Board empty() { return Board(); }
-  static constexpr Board from_fen(const std::string &fen) { return Board(fen); }
+  static inline Board from_fen(const std::string &fen) { return Board(fen); }
 
   // Conversion
-  Board &operator=(const Board &b) = default;
+  inline Board &operator=(const Board &b) = default;
 
   constexpr void set_piece(Square sq, Piece p) {
     const int idx = static_cast<int>(sq);
@@ -128,13 +136,145 @@ public:
     update_board_from_bitboards();
   }
 
-  static std::string get_utf8_piece(const Piece &piece);
-  static std::string get_ascii_piece(const Piece &piece);
+  static inline std::string get_utf8_piece(const Piece &piece) {
+    static const std::string pieceUTF8[2][Piece::Type::PIECE_NB] = {
+        {".", "♟", "♞", "♝", "♜", "♛", "♚"}, // White
+        {".", "♙", "♘", "♗", "♖", "♕", "♔"}  // Black
+    };
+    return pieceUTF8[piece.color()][piece.type()];
+  }
+  static inline std::string get_ascii_piece(const Piece &piece) {
+    static const char pieceChars[2][Piece::Type::PIECE_NB] = {
+        {'.', 'P', 'N', 'B', 'R', 'Q', 'K'}, // White
+        {'.', 'p', 'n', 'b', 'r', 'q', 'k'}  // Black
+    };
+    return std::string{pieceChars[piece.color()][piece.type()]};
+  }
 
-  void inline print(std::string (*)(const Piece &)) const;
+  inline void print(std::string get_piece(const Piece &)) const {
+    for (int rank = 7; rank >= 0; --rank) {
+      std::printf("%d ", rank + 1);
+      for (int file = 0; file < 8; ++file) {
+        int index = rank * 8 + file;
+        const auto &piece = board[index];
+        std::string str = get_piece(piece);
+        std::printf("%s ", static_cast<const char *>(str.c_str()));
+      }
+      std::printf("\n");
+    }
+    std::printf("  a b c d e f g h\n");
+  }
 
 public:
   // Factory functions
-  static constexpr Board init_std();
-  static constexpr Board init_960();
+  static inline Board init_std() {
+    return Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+  }
+
+  // TODO
+  // Fischer-Random:
+  // https://en.wikipedia.org/wiki/Fischer%E2%80%93Random_chess_move_generation
+  // for now it's a random position for tests purposesO
+  static inline Board init_960() {
+    return Board("nqrkrbbn/pppppppp/8/8/8/8/PPPPPPPP/NQRKRBBN w KQkq - 0 1");
+  }
+
+  // only modify the pieces it doesn't consider the other fields of FEN position
+  inline void set_from_fen(const std::string &fen) {
+    auto match = fen_validator(fen);
+    if (!match)
+      throw std::runtime_error("Invalid FEN");
+
+    // Set pieces for each row
+    for (int i = 1; i < 9; ++i) {
+      uint8_t file{};
+      int rank = 8 - i; // fen start from a8
+
+      for (char c : (*match)[i].str()) {
+        if (isdigit(c)) {
+          file += c - '0';
+          continue;
+        }
+        if (isalpha(c)) {
+          using enum Piece::Type;
+          using enum Piece::Color;
+          uint8_t p;
+          switch (c) { // clang-format off
+          case 'p': p = PAWN | BLACK; break;
+          case 'P': p = PAWN | WHITE; break;
+          case 'n': p = KNIGHT | BLACK; break;
+          case 'N': p = KNIGHT | WHITE; break;
+          case 'b': p = BISHOP | BLACK; break;
+          case 'B': p = BISHOP | WHITE; break;
+          case 'r': p = ROOK | BLACK; break;
+          case 'R': p = ROOK | WHITE; break;
+          case 'q': p = QUEEN | BLACK; break;
+          case 'Q': p = QUEEN | WHITE; break;
+          default:  p = Piece::empty(); break;
+          } // clang-format on
+          int index = rank * 8 + file;
+          board.at(index) = Piece(p);
+          ++file;
+        }
+      }
+    }
+  }
+
+  // TODO
+  inline std::string to_fen() const { return {}; }
+
+private:
+  // function for validating a FEN position
+  // match[0] is the whole match of pieces = match[1-8]
+  // match[1-8] are the 8 rows of the board
+  // match[9] is the turn
+  // match[10] is the castle rights
+  // match[11] is the en passant square
+  // match[12] is the halfmove
+  // match[13] is the fullmove
+  static inline std::optional<std::smatch>
+  fen_validator(const std::string &fen) {
+    static const std::regex fen_regex(
+        R"(^((?:([pnbrqkPNBRQK1-8]+)/){7}([pnbrqkPNBRQK1-8]+))\s)" // posizione
+        R"((w|b)\s)"                                               // turno
+        R"((-|K?Q?k?q?)\s)"                                        // arrocco
+        R"((-|[a-h][36])\s)"                                       // en passant
+        R"((\d+)\s(\d+)$)" // half move and full move
+    );
+
+    std::smatch match;
+    if (!std::regex_match(fen, match, fen_regex)) {
+      return std::nullopt; // no match → FEN invalid
+    }
+
+    // Every file must have cells
+    std::string position = match[1];
+    size_t start = 0, end;
+    int rows = 0;
+    while ((end = position.find('/', start)) != std::string::npos) {
+      std::string row = position.substr(start, end - start);
+      int count = 0;
+      for (char c : row)
+        count += isdigit(c) ? c - '0' : 1;
+      if (count != 8)
+        return std::nullopt;
+      rows++;
+      start = end + 1;
+    }
+    //
+    {
+      std::string row = position.substr(start);
+      int count = 0;
+      for (char c : row)
+        count += isdigit(c) ? c - '0' : 1;
+      if (count != 8)
+        return std::nullopt;
+      rows++;
+    }
+
+    if (rows != 8)
+      return std::nullopt;
+
+    return match; // retrurn all the match groups
+  }
 };

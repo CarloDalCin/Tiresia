@@ -34,6 +34,7 @@ public:
   friend constexpr Piece operator|(Type t, Color c) { return Piece(c, t); }
 
   // Factory functions
+  constexpr explicit Piece(uint8_t ct) : data(ct) {}
   constexpr explicit Piece(Color c, Type t)
       : data((static_cast<uint8_t>(c) << 6) | static_cast<uint8_t>(t)) {}
   constexpr explicit Piece(Type t, Color c) : Piece(c, t) {}
@@ -79,6 +80,4 @@ public:
 
 private:
   uint8_t data;
-
-  constexpr explicit Piece(uint8_t ct) : data(ct) {}
 };
