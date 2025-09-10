@@ -29,7 +29,9 @@ constexpr uint64_t squares_to_ULL(Squares... square) {
 }
 
 constexpr Square square_from_string(const std::string &str) {
-  return static_cast<Square>((std::tolower(str[0]) - 'a') * 8 + (str[1] - '1'));
+  int file = std::tolower(str[0]) - 'a'; // a=0, b=1, ...
+  int rank = str[1] - '1';               // 1=0, 2=1, ..., 8=7
+  return static_cast<Square>(rank * 8 + file);
 }
 
 // Move is only a wrapper for the information needed to move a piece, it does

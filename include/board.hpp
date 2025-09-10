@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cassert>
 #include <cstdint>
 #include <optional>
 #include <regex>
@@ -9,11 +10,6 @@
 #include "castle.hpp"
 #include "move.hpp"
 #include "piece.hpp"
-
-#ifdef DEBUG
-#define TODO                                                                   \
-  retrun {}
-#endif
 
 /*
 The board is represented as a 64 bit integer, with each bit representing a
@@ -36,9 +32,9 @@ for a better understanding of how the board is represented see the move.hpp file
 class Board {
 private:
   // total size = 1472 bits = 184 bytes
-  std::array<Piece, 64> board; // 64 * 8 bits = 512 bits
-  CastleRights castleRights;   // 8 bits + 56 bits(padding) = 64 bits
-  union {                      // 2 * 7 * 64 bits = 896 bits
+  std::array<Piece, 64> mailbox; // 64 * 8 bits = 512 bits
+  CastleRights castleRights;     // 8 bits + 56 bits(padding) = 64 bits
+  union {                        // 2 * 7 * 64 bits = 896 bits
     std::array<std::array<uint64_t, Piece::Type::PIECE_NB>,
                Piece::Color::COLOR_NB>
         pieces; // 0 = white, 1 = black
@@ -53,7 +49,7 @@ private:
 public:
   // Constructors
   constexpr explicit Board()
-      : board{}, castleRights(CastleRights::NO_CASTLE), pieces{{}} {}
+      : mailbox{}, castleRights(CastleRights::NO_CASTLE), pieces{{}} {}
   constexpr Board(const Board &b) = default;
   // FEN ref: https://it.wikipedia.org/wiki/Notazione_Forsyth-Edwards
   inline Board(const std::string &fen) { set_from_fen(fen); }
@@ -65,75 +61,40 @@ public:
   // Conversion
   inline Board &operator=(const Board &b) = default;
 
-  constexpr void set_piece(Square sq, Piece p) {
-    const int idx = static_cast<int>(sq);
-    // Remove old piece from bitboard
-    const Piece old = board[idx];
-    if (old)
-      pieces[old.color()][static_cast<uint8_t>(old.type())] &= ~(1ULL << idx);
-
-    // Insert new piece into bitboard
-    if (p)
-      pieces[p.color()][static_cast<uint8_t>(p.type())] |= (1ULL << idx);
-
-    // Update Piece array
-    board[idx] = p;
-  }
-
   constexpr Piece get_piece(Square sq) const {
-    return board[static_cast<int>(sq)];
+    return mailbox.at(static_cast<int>(sq));
   }
 
-  // Aggiorna l’array board[64] a partire dalle bitboard
-  constexpr void update_board_from_bitboards() {
-    // Clear board
-    for (int i = 0; i < 64; ++i)
-      board[i] = Piece::empty();
+  // Set piece at square sq
+  // Note do not use set_piece(sq) instead of remove_piece(sq)
+  constexpr void set_piece(Square to, Piece p = Piece::empty()) {
+    mailbox.at(static_cast<int>(to)) = p;
+    if (p)
+      pieces.at(p.color()).at(p.type()) |= squares_to_ULL(to);
+  }
 
-    // Update from bitboard white
-    for (uint8_t t = 1; t < Piece::Type::PIECE_NB; ++t) {
-      uint64_t bits = white[t];
-      for (int sq = 0; bits; ++sq) {
-        if (bits & 1ULL)
-          board[sq] =
-              Piece::make(Piece::Color::WHITE, static_cast<Piece::Type>(t));
-        bits >>= 1;
-      }
-    }
-
-    // update from bitboard black
-    for (uint8_t t = 1; t < Piece::Type::PIECE_NB; ++t) {
-      uint64_t bits = black[t];
-      for (int sq = 0; bits; ++sq) {
-        if (bits & 1ULL)
-          board[sq] =
-              Piece::make(Piece::Color::BLACK, static_cast<Piece::Type>(t));
-        bits >>= 1;
-      }
+  // Remove piece at square sq
+  // Note do not use set_piece(sq) instead of remove_piece(sq)
+  constexpr void remove_piece(Square sq) {
+    Piece p = get_piece(sq);
+    if (p) {
+      pieces.at(p.color()).at(p.type()) &= ~(squares_to_ULL(sq));
+      set_piece(sq);
     }
   }
 
-  // Move piece 'from' to 'to' with Piece board
+  // Move piece 'from' to 'to'
   constexpr void move_piece(Square from, Square to) {
     const Piece p = get_piece(from);
-    set_piece(from, Piece::empty());
-    set_piece(to, p);
+    if (p) {
+      remove_piece(from);
+      set_piece(to, p);
+    }
   }
 
-  // Move piece 'from' to 'to' with bitboards
-  constexpr void move_piece_bitboard(Square from, Square to, Piece ct) {
-    const int from_idx = static_cast<int>(from);
-    const int to_idx = static_cast<int>(to);
-    Piece::Color color = ct.color();
-    Piece::Type type = ct.type();
-
-    // Remove piece from old position
-    pieces[color][type] &= ~(1ULL << from_idx);
-
-    // Add piece to new position
-    pieces[color][type] |= (1ULL << to_idx);
-
-    update_board_from_bitboards();
+  // Overload move_piece with Move
+  constexpr void move_piece(const Move &move) {
+    move_piece(move.from(), move.to());
   }
 
   static inline std::string get_utf8_piece(const Piece &piece) {
@@ -141,23 +102,22 @@ public:
         {".", "♟", "♞", "♝", "♜", "♛", "♚"}, // White
         {".", "♙", "♘", "♗", "♖", "♕", "♔"}  // Black
     };
+    if (piece.is_empty())
+      return pieceUTF8[0][0];
     return pieceUTF8[piece.color()][piece.type()];
   }
+
   static inline std::string get_ascii_piece(const Piece &piece) {
-    static const char pieceChars[2][Piece::Type::PIECE_NB] = {
-        {'.', 'P', 'N', 'B', 'R', 'Q', 'K'}, // White
-        {'.', 'p', 'n', 'b', 'r', 'q', 'k'}  // Black
-    };
-    return std::string{pieceChars[piece.color()][piece.type()]};
+    return std::string{piece.to_letter()};
   }
 
-  inline void print(std::string get_piece(const Piece &)) const {
+  inline void print(std::string get_piece_rapresentation(const Piece &)) const {
     for (int rank = 7; rank >= 0; --rank) {
       std::printf("%d ", rank + 1);
       for (int file = 0; file < 8; ++file) {
         int index = rank * 8 + file;
-        const auto &piece = board[index];
-        std::string str = get_piece(piece);
+        const auto &piece = mailbox[index];
+        std::string str = get_piece_rapresentation(piece);
         std::printf("%s ", static_cast<const char *>(str.c_str()));
       }
       std::printf("\n");
@@ -174,71 +134,81 @@ public:
   // TODO
   // Fischer-Random:
   // https://en.wikipedia.org/wiki/Fischer%E2%80%93Random_chess_move_generation
-  // for now it's a random position for tests purposesO
+  // for now it's a random position for tests purposes
   static inline Board init_960() {
     return Board("nqrkrbbn/pppppppp/8/8/8/8/PPPPPPPP/NQRKRBBN w KQkq - 0 1");
   }
 
-  // only modify the pieces it doesn't consider the other fields of FEN position
+  // only modify the pieces it doesn't consider the other fields of FEN
+  // position
   inline void set_from_fen(const std::string &fen) {
     auto match = fen_validator(fen);
     if (!match)
       throw std::runtime_error("Invalid FEN");
 
-    // Set pieces for each row
-    for (int i = 1; i < 9; ++i) {
-      uint8_t file{};
-      int rank = 8 - i; // fen start from a8
+    // Clear the board
+    for (int i = 0; i < 64; ++i)
+      set_piece(static_cast<Square>(i), Piece::empty());
 
-      for (char c : (*match)[i].str()) {
+    // Obtained the position part of separated by '/'
+    std::string position = (*match)[1].str();
+    size_t start = 0;
+    int rank = 7; // FEN start from a8
+
+    while (rank >= 0) {
+      size_t end = position.find('/', start);
+      std::string row;
+      if (end == std::string::npos)
+        row = position.substr(start); // last row
+      else
+        row = position.substr(start, end - start);
+
+      int file = 0;
+      for (char c : row) {
         if (isdigit(c)) {
           file += c - '0';
-          continue;
-        }
-        if (isalpha(c)) {
-          using enum Piece::Type;
-          using enum Piece::Color;
-          uint8_t p;
-          switch (c) { // clang-format off
-          case 'p': p = PAWN | BLACK; break;
-          case 'P': p = PAWN | WHITE; break;
-          case 'n': p = KNIGHT | BLACK; break;
-          case 'N': p = KNIGHT | WHITE; break;
-          case 'b': p = BISHOP | BLACK; break;
-          case 'B': p = BISHOP | WHITE; break;
-          case 'r': p = ROOK | BLACK; break;
-          case 'R': p = ROOK | WHITE; break;
-          case 'q': p = QUEEN | BLACK; break;
-          case 'Q': p = QUEEN | WHITE; break;
-          default:  p = Piece::empty(); break;
-          } // clang-format on
+          if (file > 8)
+            throw std::runtime_error("Invalid FEN: rank overflow");
+        } else {
+          if (file >= 8)
+            throw std::runtime_error("Invalid FEN: file overflow");
+
           int index = rank * 8 + file;
-          board.at(index) = Piece(p);
+          set_piece(static_cast<Square>(index), Piece(c));
           ++file;
         }
       }
+
+      if (file != 8)
+        throw std::runtime_error("Invalid FEN: rank does not sum to 8 squares");
+
+      if (end == std::string::npos)
+        break;
+      start = end + 1;
+      --rank;
     }
   }
 
   // TODO
+  // this function only return the FEN position of the board and not the other
+  // fields of FEN
   inline std::string to_fen() const { return {}; }
 
 private:
   // function for validating a FEN position
-  // match[0] is the whole match of pieces = match[1-8]
-  // match[1-8] are the 8 rows of the board
-  // match[9] is the turn
-  // match[10] is the castle rights
-  // match[11] is the en passant square
-  // match[12] is the halfmove
-  // match[13] is the fullmove
+  // match[0] is the whole match of the position
+  // match[1] is the turn
+  // match[2] is the castle rights
+  // match[3] is the en passant square
+  // match[4] is the halfmove
+  // match[5] is the fullmove
   static inline std::optional<std::smatch>
   fen_validator(const std::string &fen) {
     static const std::regex fen_regex(
-        R"(^((?:([pnbrqkPNBRQK1-8]+)/){7}([pnbrqkPNBRQK1-8]+))\s)" // posizione
-        R"((w|b)\s)"                                               // turno
-        R"((-|K?Q?k?q?)\s)"                                        // arrocco
-        R"((-|[a-h][36])\s)"                                       // en passant
+        R"(^((?:[pnbrqkPNBRQK1-8]+/){7}[pnbrqkPNBRQK1-8]+)\s)" // posizione
+        R"((w|b)\s)"                                           // turno
+        R"((-|K?Q?k?q?)\s)"                                    // arrocco
+        R"((-|[a-h][36])\s)"                                   // en passant
         R"((\d+)\s(\d+)$)" // half move and full move
     );
 
