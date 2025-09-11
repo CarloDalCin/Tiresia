@@ -6,6 +6,7 @@
 // Include le tue classi
 #include "board.hpp"
 #include "castle.hpp"
+#include "gamestate.hpp"
 #include "libtiresia.hpp"
 #include "move.hpp"
 #include "piece.hpp"
@@ -15,8 +16,8 @@ int main(int argc, char **argv) {
   std::cout << "TEST START ........................................"
             << std::endl;
 
-  Board b = Board::init_std();
 #ifdef DEBUG
+  Board b = Board::init_std();
   // Test Board
   b.print(Board::get_utf8_piece);
   b.print(Board::get_ascii_piece);
@@ -40,11 +41,11 @@ int main(int argc, char **argv) {
   assert(m.type() == Move::Type::NORMAL);
 #endif
 
-  bool white_turn = true;
+  GameState gs = GameState::init_std();
 
   std::string line;
   do {
-    b.print(Board::get_utf8_piece);
+    gs.print();
     std::printf("> ");
     std::getline(std::cin, line);
 
@@ -52,7 +53,7 @@ int main(int argc, char **argv) {
       std::string from = line.substr(0, 2);
       std::string to = line.substr(2, 2);
 
-      b.move_piece(square_from_string(from), square_from_string(to));
+      gs.move_piece(Square::from(from), Square::from(to));
     }
     std::cout << line << std::endl;
   } while (line != "quit");

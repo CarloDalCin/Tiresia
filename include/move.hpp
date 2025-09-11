@@ -3,7 +3,9 @@
 #include <cstdint>
 #include <string>
 
-enum class Square : uint8_t { // clang-format off
+class Square {
+public:
+  enum Value : uint8_t { // clang-format off
 //0   1   2   3   4   5   6   7
   A1, B1, C1, D1, E1, F1, G1, H1,
 //8   9   10  11  12  13  14  15
@@ -20,19 +22,39 @@ enum class Square : uint8_t { // clang-format off
   A7, B7, C7, D7, E7, F7, G7, H7,
 //56  57  58  59  60  61  62  63
   A8, B8, C8, D8, E8, F8, G8, H8,
-  SQUARE_NONE
+  NONE
 }; // clang-format on
 
-template <typename... Squares>
-constexpr uint64_t squares_to_ULL(Squares... square) {
-  return (0ULL | ... | (1ULL << static_cast<int>(square)));
-}
+  constexpr explicit Square() : square(Value::NONE) {}
+  constexpr explicit Square(Value square) : square(square) {}
+  constexpr Square(uint8_t square) : square(static_cast<Value>(square)) {}
+  constexpr Square(const std::string &str) : square(Value::NONE) {
+    int file = std::tolower(str[0]) - 'a'; // a=0, b=1, ...
+    int rank = str[1] - '1';               // 1=0, 2=1, ..., 8=7
+    square = static_cast<Value>(rank * 8 + file);
+  }
+  static constexpr Square from(const std::string &str) { return Square(str); }
+  static constexpr Square from(Value square) { return Square(square); }
 
-constexpr Square square_from_string(const std::string &str) {
-  int file = std::tolower(str[0]) - 'a'; // a=0, b=1, ...
-  int rank = str[1] - '1';               // 1=0, 2=1, ..., 8=7
-  return static_cast<Square>(rank * 8 + file);
-}
+  constexpr uint8_t to_int() const { return static_cast<uint8_t>(square); }
+  constexpr operator uint8_t() const { return to_int(); }
+
+  friend constexpr Square operator|(Square lhs, Square rhs) = delete;
+  friend constexpr Square operator&(Square lhs, Square rhs) = delete;
+
+  // TODO xor and not
+  friend constexpr Square operator^(Square lhs, Square rhs) = delete;
+  friend constexpr Square operator~(Square lhs) = delete;
+
+  // Convert a list of squares to a uint64_t
+  template <typename... Squares>
+  static constexpr uint64_t to_uint64(Squares... square) {
+    return (0ULL | ... | (1ULL << static_cast<int>(square)));
+  }
+
+private:
+  Value square;
+};
 
 // Move is only a wrapper for the information needed to move a piece, it does
 // not actually move the piece!! It contains information about the source and
@@ -55,22 +77,24 @@ private:
 
 public:
   enum class Type : uint8_t {
-    NORMAL = 0,           // just a normal move
-    PROMOTION_KNIGHT = 1, // promotion to knight
-    PROMOTION_BISHOP = 2, // promotion to bishop
-    PROMOTION_ROOK = 3,   // ...to rook
-    PROMOTION_QUEEN = 4,  // ...to queen
-    EN_PASSANT = 5,       // en passant capture
-    CASTLING = 6,         // castling (king side or quek side)
+    NORMAL = 0, // just a normal move
+    CASTLING = 1,
 
+    // promotion_piece = piece.type()
+    // example: promotion_KNIGHT = Piece::Type::KNIGHT
+    PROMOTION_KNIGHT = 2, // promotion to knight
+    PROMOTION_BISHOP = 3, // promotion to bishop
+    PROMOTION_ROOK = 4,   // ...to rook
+    PROMOTION_QUEEN = 5,  // ...to queen
+    EN_PASSANT = 6,       // en passant capture
     // double pawn move (only valid for the first move of the pawn)
     DOUBLE_PAWN_PUSH = 7,
-    CAPTURE = 8,
-    CHECK = 9,
-    CHECKMATE = 10,
-    BULL_MOVE = 11, // for pruning
+    BULL_MOVE = 8, // for pruning
 
     // reserved for future use
+    RESERVED_9 = 9,
+    RESERVED_10 = 10,
+    RESERVED_11 = 11,
     RESERVED_12 = 12,
     RESERVED_13 = 13,
     RESERVED_14 = 14,

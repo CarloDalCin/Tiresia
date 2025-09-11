@@ -7,7 +7,6 @@
 #include <regex>
 #include <string>
 
-#include "castle.hpp"
 #include "move.hpp"
 #include "piece.hpp"
 
@@ -31,9 +30,8 @@ for a better understanding of how the board is represented see the move.hpp file
 
 class Board {
 private:
-  // total size = 1472 bits = 184 bytes
+  // total size = 1408 bits = 176 bytes
   std::array<Piece, 64> mailbox; // 64 * 8 bits = 512 bits
-  CastleRights castleRights;     // 8 bits + 56 bits(padding) = 64 bits
   union {                        // 2 * 7 * 64 bits = 896 bits
     std::array<std::array<uint64_t, Piece::Type::PIECE_NB>,
                Piece::Color::COLOR_NB>
@@ -48,8 +46,7 @@ private:
 
 public:
   // Constructors
-  constexpr explicit Board()
-      : mailbox{}, castleRights(CastleRights::NO_CASTLE), pieces{{}} {}
+  constexpr explicit Board() : mailbox{}, pieces{{}} {}
   constexpr Board(const Board &b) = default;
   // FEN ref: https://it.wikipedia.org/wiki/Notazione_Forsyth-Edwards
   inline Board(const std::string &fen) { set_from_fen(fen); }
@@ -70,7 +67,7 @@ public:
   constexpr void set_piece(Square to, Piece p = Piece::empty()) {
     mailbox.at(static_cast<int>(to)) = p;
     if (p)
-      pieces.at(p.color()).at(p.type()) |= squares_to_ULL(to);
+      pieces.at(p.color()).at(p.type()) |= Square::to_uint64(to);
   }
 
   // Remove piece at square sq
@@ -78,7 +75,7 @@ public:
   constexpr void remove_piece(Square sq) {
     Piece p = get_piece(sq);
     if (p) {
-      pieces.at(p.color()).at(p.type()) &= ~(squares_to_ULL(sq));
+      pieces.at(p.color()).at(p.type()) &= ~(Square::to_uint64(sq));
       set_piece(sq);
     }
   }
@@ -197,53 +194,17 @@ public:
 private:
   // function for validating a FEN position
   // match[0] is the whole match of the position
-  // match[1] is the turn
-  // match[2] is the castle rights
-  // match[3] is the en passant square
-  // match[4] is the halfmove
-  // match[5] is the fullmove
   static inline std::optional<std::smatch>
   fen_validator(const std::string &fen) {
     static const std::regex fen_regex(
-        R"(^((?:[pnbrqkPNBRQK1-8]+/){7}[pnbrqkPNBRQK1-8]+)\s)" // posizione
-        R"((w|b)\s)"                                           // turno
-        R"((-|K?Q?k?q?)\s)"                                    // arrocco
-        R"((-|[a-h][36])\s)"                                   // en passant
-        R"((\d+)\s(\d+)$)" // half move and full move
+        R"(^((?:[pnbrqkPNBRQK1-8]+/){7}[pnbrqkPNBRQK1-8]+)\s)" // position
+        R"(.*)" // rest not considered
     );
 
     std::smatch match;
     if (!std::regex_match(fen, match, fen_regex)) {
       return std::nullopt; // no match → FEN invalid
     }
-
-    // Every file must have cells
-    std::string position = match[1];
-    size_t start = 0, end;
-    int rows = 0;
-    while ((end = position.find('/', start)) != std::string::npos) {
-      std::string row = position.substr(start, end - start);
-      int count = 0;
-      for (char c : row)
-        count += isdigit(c) ? c - '0' : 1;
-      if (count != 8)
-        return std::nullopt;
-      rows++;
-      start = end + 1;
-    }
-    //
-    {
-      std::string row = position.substr(start);
-      int count = 0;
-      for (char c : row)
-        count += isdigit(c) ? c - '0' : 1;
-      if (count != 8)
-        return std::nullopt;
-      rows++;
-    }
-
-    if (rows != 8)
-      return std::nullopt;
 
     return match; // retrurn all the match groups
   }
