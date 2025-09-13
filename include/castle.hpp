@@ -35,6 +35,7 @@ public:
   constexpr explicit CastleRights(Value v) : data(v) {}
   constexpr CastleRights(const CastleRights &v) : data(v.data) {}
   constexpr operator uint8_t() const { return static_cast<uint8_t>(data); }
+  inline operator std::string() const { return to_string(); }
   inline explicit CastleRights(const std::string &str) {
     for (auto c : str) {
       switch (c) { // clang-format off
@@ -42,7 +43,7 @@ public:
         case 'Q': data |= WHITE_QUEENSIDE; break;
         case 'k': data |= BLACK_KINGSIDE; break;
         case 'q': data |= BLACK_QUEENSIDE; break;
-        default: data |= NONE; break;
+        default:  data |= NONE; break;
       } // clang-format on
     }
   }
@@ -53,6 +54,22 @@ public:
   static constexpr CastleRights make(Value v) { return CastleRights(v); }
   static inline CastleRights from(const std::string &str) {
     return CastleRights(str);
+  }
+
+  // to_strin
+  inline std::string to_string() const {
+    std::string str;
+    if (data & WHITE_KINGSIDE)
+      str += 'K';
+    if (data & WHITE_QUEENSIDE)
+      str += 'Q';
+    if (data & BLACK_KINGSIDE)
+      str += 'k';
+    if (data & BLACK_QUEENSIDE)
+      str += 'q';
+    if (str.empty())
+      str += '-';
+    return str;
   }
 
 private:

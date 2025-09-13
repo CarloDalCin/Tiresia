@@ -58,32 +58,72 @@ public:
   // Conversion
   inline Board &operator=(const Board &b) = default;
 
-  constexpr Piece get_piece(Square sq) const {
+  // Get piece at square sq from the mailbox (technically more efficient than
+  // get_piece_in_bitboard_at)
+  constexpr Piece get_piece_in_mailbox_at(Square sq) const {
     return mailbox.at(static_cast<int>(sq));
+  }
+
+  // Get piece at square sq from the bitboard (the only useful case is when you
+  // want to use the bitboard a lot by improving the use of the cache) (((maybe,
+  // sould be tested!)))
+  // TODO: check if it's worth it in some cases
+  constexpr Piece get_piece_in_bitboard_at(Square sq) const {
+    for (int i = 1; i < Piece::Type::PIECE_NB; ++i) {
+      if (pieces.at(Piece::Color::WHITE).at(i) & Square::to_uint64(sq)) {
+        return Piece(Piece::Color::WHITE, static_cast<Piece::Type>(i));
+      }
+      if (pieces.at(Piece::Color::BLACK).at(i) & Square::to_uint64(sq)) {
+        return Piece(Piece::Color::BLACK, static_cast<Piece::Type>(i));
+      }
+    }
+    return Piece::empty();
   }
 
   // Set piece at square sq
   // Note do not use set_piece(sq) instead of remove_piece(sq)
   constexpr void set_piece(Square to, Piece p = Piece::empty()) {
-    mailbox.at(static_cast<int>(to)) = p;
-    if (p)
+    if (p) [[likely]] {
+      mailbox.at(static_cast<int>(to)) = p;
       pieces.at(p.color()).at(p.type()) |= Square::to_uint64(to);
+    } else [[unlikely]] {
+      remove_piece(to);
+    }
   }
 
   // Remove piece at square sq
-  // Note do not use set_piece(sq) instead of remove_piece(sq)
+  // Note: do not use set_piece(sq) instead of remove_piece(sq)
   constexpr void remove_piece(Square sq) {
-    Piece p = get_piece(sq);
+    Piece p = get_piece_in_mailbox_at(sq);
     if (p) {
+      mailbox.at(static_cast<int>(sq)) = Piece::empty();
       pieces.at(p.color()).at(p.type()) &= ~(Square::to_uint64(sq));
-      set_piece(sq);
     }
+  }
+
+  // Get the available moves for a piece at square sq
+  // TODO
+  inline std::vector<Move> get_moves_for_piece_at(Square sq) const {
+    std::vector<Move> moves;
+    const Piece p = get_piece_in_bitboard_at(sq);
+    if (p) {
+      switch (p.type()) {
+      case Piece::Type::PAWN:
+      case Piece::Type::KNIGHT:
+      case Piece::Type::BISHOP:
+      case Piece::Type::ROOK:
+      case Piece::Type::QUEEN:
+      case Piece::Type::KING:
+        break;
+      }
+    }
+    return moves;
   }
 
   // Move piece 'from' to 'to'
   constexpr void move_piece(Square from, Square to) {
-    const Piece p = get_piece(from);
-    if (p) {
+    const Piece p = get_piece_in_mailbox_at(from);
+    if (p) [[likely]] {
       remove_piece(from);
       set_piece(to, p);
     }
@@ -96,8 +136,8 @@ public:
 
   static inline std::string get_utf8_piece(const Piece &piece) {
     static const std::string pieceUTF8[2][Piece::Type::PIECE_NB] = {
-        {".", "♟", "♞", "♝", "♜", "♛", "♚"}, // White
-        {".", "♙", "♘", "♗", "♖", "♕", "♔"}  // Black
+        {".", "♙", "♘", "♗", "♖", "♕", "♔"}, // White
+        {".", "♟", "♞", "♝", "♜", "♛", "♚"}, // Black
     };
     if (piece.is_empty())
       return pieceUTF8[0][0];
@@ -125,7 +165,7 @@ public:
 public:
   // Factory functions
   static inline Board init_std() {
-    return Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    return Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
   }
 
   // TODO
@@ -133,7 +173,7 @@ public:
   // https://en.wikipedia.org/wiki/Fischer%E2%80%93Random_chess_move_generation
   // for now it's a random position for tests purposes
   static inline Board init_960() {
-    return Board("nqrkrbbn/pppppppp/8/8/8/8/PPPPPPPP/NQRKRBBN w KQkq - 0 1");
+    return Board("nqrkrbbn/pppppppp/8/8/8/8/PPPPPPPP/NQRKRBBN");
   }
 
   // only modify the pieces it doesn't consider the other fields of FEN
@@ -143,9 +183,7 @@ public:
     if (!match)
       throw std::runtime_error("Invalid FEN");
 
-    // Clear the board
-    for (int i = 0; i < 64; ++i)
-      set_piece(static_cast<Square>(i), Piece::empty());
+    clear();
 
     // Obtained the position part of separated by '/'
     std::string position = (*match)[1].str();
@@ -197,15 +235,25 @@ private:
   static inline std::optional<std::smatch>
   fen_validator(const std::string &fen) {
     static const std::regex fen_regex(
-        R"(^((?:[pnbrqkPNBRQK1-8]+/){7}[pnbrqkPNBRQK1-8]+)\s)" // position
+        R"(^((?:[pnbrqkPNBRQK1-8]+/){7}[pnbrqkPNBRQK1-8]+))" // position
         R"(.*)" // rest not considered
     );
-
     std::smatch match;
     if (!std::regex_match(fen, match, fen_regex)) {
       return std::nullopt; // no match → FEN invalid
     }
-
     return match; // retrurn all the match groups
+  }
+
+  // Clear the board
+  constexpr void clear() {
+    for (int i = 0; i < mailbox.size(); ++i)
+      remove_piece(static_cast<Square>(i));
+  }
+
+  // check if 2 squares are ocuppied by the same color
+  constexpr bool are_in_the_same_team(Square p1, Square p2) const {
+    return get_piece_in_mailbox_at(p1).color() ==
+           get_piece_in_mailbox_at(p2).color();
   }
 };

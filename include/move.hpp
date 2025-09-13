@@ -38,6 +38,7 @@ public:
 
   constexpr uint8_t to_int() const { return static_cast<uint8_t>(square); }
   constexpr operator uint8_t() const { return to_int(); }
+  inline operator std::string() const { return to_string(); }
 
   friend constexpr Square operator|(Square lhs, Square rhs) = delete;
   friend constexpr Square operator&(Square lhs, Square rhs) = delete;
@@ -50,6 +51,16 @@ public:
   template <typename... Squares>
   static constexpr uint64_t to_uint64(Squares... square) {
     return (0ULL | ... | (1ULL << static_cast<int>(square)));
+  }
+
+  // to_string
+  inline std::string to_string() const {
+    if (square == Value::NONE)
+      return "-";
+    int idx = static_cast<int>(square);
+    char file = idx % 8 + 'a';
+    char rank = idx / 8 + '1';
+    return std::string{file, rank};
   }
 
 private:

@@ -13,6 +13,7 @@ private:
   // // count of moves without a capture or pawn move (in
   // rare case the limit increase up to 150 half move)
   uint16_t _halfMoveClock; // 2 bytes
+
   // full move = move for both players
   uint16_t _fullMoveNumber;   // 2 bytes
   CastleRights _castleRights; // 1 byte
@@ -21,24 +22,23 @@ private:
 
 public:
   // Default constructor with a standard position
-  inline GameState() {
-    GameState("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-  }
+  inline GameState()
+      : GameState("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") {}
   // Constructors from FEN
   inline GameState(const std::string &fen) {
     auto const match = fen_validator(fen);
     if (!match)
       throw std::runtime_error("Invalid FEN");
 
-    board = Board((*match)[0].str());
-    _turn = (*match)[1] == "w" ? Piece::Color::WHITE : Piece::Color::BLACK;
-    _castleRights = CastleRights::from((*match)[2].str());
+    board = Board((*match)[1].str());
+    _turn = (*match)[2] == "w" ? Piece::Color::WHITE : Piece::Color::BLACK;
+    _castleRights = CastleRights::from((*match)[3].str());
     _enPassantSquare =
-        (*match)[3] == "-"
+        (*match)[4] == "-"
             ? Square::NONE                     // no en passant
-            : Square::from((*match)[3].str()); // en passant position
-    _halfMoveClock = std::stoi((*match)[4].str());
-    _fullMoveNumber = std::stoi((*match)[5].str());
+            : Square::from((*match)[4].str()); // en passant position
+    _halfMoveClock = std::stoi((*match)[5].str());
+    _fullMoveNumber = std::stoi((*match)[6].str());
   }
 
   static inline GameState init_std() { return GameState(); }
@@ -49,12 +49,13 @@ public:
 
 private:
   // function for validating a FEN position
-  // match[0] is the whole match of the position
-  // match[1] is the turn
-  // match[2] is the castle rights
-  // match[3] is the en passant square
-  // match[4] is the halfmove
-  // match[5] is the fullmove
+  // match[0] is the whole match
+  // match[1] is the match of the position
+  // match[2] is the turn
+  // match[3] is the castle rights
+  // match[4] is the en passant square
+  // match[5] is the halfmove
+  // match[6] is the fullmove
   static inline std::optional<std::smatch>
   fen_validator(const std::string &fen) {
     static const std::regex fen_regex(
@@ -109,7 +110,19 @@ public:
   constexpr Square enPassantSquare() const { return _enPassantSquare; }
   constexpr Piece::Color turn() const { return _turn; }
 
-  inline void print() { board.print(Board::get_utf8_piece); }
+  inline void state() {
+    static std::size_t i = 1;
+    std::printf("GameState %zu\n", i++);
+    std::printf("Board===============\n");
+    print_board();
+    std::printf("Turn:              %15s\n", _turn ? "Black" : "White");
+    std::printf("Castle rights:     %15s\n", _castleRights.to_string().c_str());
+    std::printf("En passant square: %15s\n",
+                _enPassantSquare.to_string().c_str());
+    std::printf("Half move clock:   %15d\n", _halfMoveClock);
+    std::printf("Full move number:  %15d\n", _fullMoveNumber);
+  }
+  inline void print_board() { board.print(Board::get_utf8_piece); }
   constexpr void remove_piece(Square sq) { board.remove_piece(sq); }
   constexpr void move_piece(const Move &move) { move_piece(move); }
   constexpr void move_piece(Square from, Square to) {

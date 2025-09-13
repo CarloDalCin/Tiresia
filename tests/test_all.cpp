@@ -11,13 +11,13 @@
 #include "move.hpp"
 #include "piece.hpp"
 
-int main(int argc, char **argv) {
+int main() {
   std::cout << "libtiresia test suite" << std::endl;
   std::cout << "TEST START ........................................"
             << std::endl;
 
-#ifdef DEBUG
   Board b = Board::init_std();
+#ifdef DEBUG
   // Test Board
   b.print(Board::get_utf8_piece);
   b.print(Board::get_ascii_piece);
@@ -45,7 +45,8 @@ int main(int argc, char **argv) {
 
   std::string line;
   do {
-    gs.print();
+    gs.state();
+
     std::printf("> ");
     std::getline(std::cin, line);
 
